@@ -18,6 +18,9 @@ public enum DroneModel {
     }
 
     public static DroneModel getByModelName(String modelName) {
+        if(modelName == null){
+            return null;
+        }
         return Arrays.stream(DroneModel.values())
                 .filter(droneModel -> droneModel.getModelName().equals(modelName))
                 .findFirst()

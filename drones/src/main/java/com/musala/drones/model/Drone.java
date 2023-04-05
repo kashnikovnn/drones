@@ -24,7 +24,6 @@ public class Drone {
 
     private String serialNumber;
 
-
     @Convert(converter = DroneModelConverter.class)
     private DroneModel model;
 
@@ -34,15 +33,5 @@ public class Drone {
 
     @Enumerated(EnumType.STRING)
     private DroneState state;
-
-
-
-
-
-
-
-
-
-
 
 }

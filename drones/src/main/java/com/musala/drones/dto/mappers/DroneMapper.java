@@ -8,9 +8,9 @@ import org.mapstruct.Mapping;
 @Mapper(componentModel = "spring")
 public interface DroneMapper {
 
-    @Mapping(expression = "java(drone.getModel().getModelName())", target = "model")
+    @Mapping(expression = "java(drone.getModel()==null?null:drone.getModel().getModelName())", target = "model")
     DroneDto mapToDroneDto(Drone drone);
 
-    @Mapping(expression = "java(com.musala.drones.model.enums.DroneModel.getByModelName(droneDto.getModel()))", target = "model")
+    @Mapping(expression = "java(droneDto.getModel()==null?null:com.musala.drones.model.enums.DroneModel.getByModelName(droneDto.getModel()))", target = "model")
     Drone mapToDrone(DroneDto droneDto);
 }

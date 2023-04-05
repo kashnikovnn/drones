@@ -7,7 +7,7 @@ import com.musala.drones.model.enums.DroneState;
 import org.junit.jupiter.api.Test;
 import org.mapstruct.factory.Mappers;
 
-import static org.junit.jupiter.api.Assertions.*;
+import static org.junit.jupiter.api.Assertions.assertEquals;
 
 class DroneMapperTest {
 
@@ -24,9 +24,16 @@ class DroneMapperTest {
                 .weightLimit(Short.valueOf("230"))
                 .build();
         DroneDto droneDto = droneMapper.mapToDroneDto(drone);
-        assertEquals(droneDto.getModel(),DroneModel.LIGHTWEIGHT.getModelName());
-        assertEquals(droneDto.getState(),DroneState.IDLE.name());
-        assertEquals(droneDto.getBatteryCapacity(),drone.getBatteryCapacity().intValue());
+        assertEquals(droneDto.getModel(), DroneModel.LIGHTWEIGHT.getModelName());
+        assertEquals(droneDto.getState(), DroneState.IDLE.name());
+        assertEquals(droneDto.getBatteryCapacity(), drone.getBatteryCapacity().intValue());
+    }
+
+
+    @Test
+    void mapEmptyToDroneDto() {
+        Drone drone = new Drone();
+        droneMapper.mapToDroneDto(drone);
     }
 
     @Test
@@ -39,8 +46,15 @@ class DroneMapperTest {
                 .weightLimit(230)
                 .build();
         Drone drone = droneMapper.mapToDrone(droneDto);
-        assertEquals(drone.getModel(),DroneModel.LIGHTWEIGHT);
-        assertEquals(drone.getState(),DroneState.IDLE);
-        assertEquals(drone.getBatteryCapacity(),Byte.valueOf("99"));
+        assertEquals(drone.getModel(), DroneModel.LIGHTWEIGHT);
+        assertEquals(drone.getState(), DroneState.IDLE);
+        assertEquals(drone.getBatteryCapacity(), Byte.valueOf("99"));
+    }
+
+    @Test
+    void mapEmptyToDrone() {
+        DroneDto droneDto = new DroneDto();
+        droneMapper.mapToDrone(droneDto);
+
     }
 }

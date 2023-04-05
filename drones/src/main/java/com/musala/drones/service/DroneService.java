@@ -2,15 +2,22 @@ package com.musala.drones.service;
 
 
 import com.musala.drones.dto.DroneDto;
-import com.musala.drones.dto.MedicationDto;
-import com.musala.drones.dto.loading.DroneLoadingDto;
-import com.musala.drones.dto.loading.MedicationQuantityDto;
+import com.musala.drones.dto.loading.DroneLoadingRequestDto;
+import com.musala.drones.dto.loading.DroneLoadingResponseDto;
+import com.musala.drones.dto.loading.MedicationQuantityRequestDto;
+import com.musala.drones.dto.loading.MedicationQuantityResponseDto;
 import com.musala.drones.dto.mappers.DroneMapper;
+import com.musala.drones.dto.mappers.MedicationMapper;
 import com.musala.drones.model.Drone;
+import com.musala.drones.model.Loading;
+import com.musala.drones.model.LoadingPK;
+import com.musala.drones.model.Medication;
+import com.musala.drones.model.enums.DroneState;
 import com.musala.drones.repository.DroneRepository;
 import com.musala.drones.repository.LoadingRepository;
-import lombok.*;
+import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
 import java.util.stream.Collectors;
@@ -20,83 +27,132 @@ import java.util.stream.Collectors;
 public class DroneService {
 
     private final DroneRepository droneRepository;
-
     private final LoadingRepository loadingRepository;
     private final DroneMapper droneMapper;
-
     private final MedicationService medicationService;
+    private final MedicationMapper medicationMapper;
+
 
     public void registerDrone(DroneDto droneDto) {
-        checkDrone(droneDto);
+        checkDroneDto(droneDto);
         Drone drone = droneMapper.mapToDrone(droneDto);
         droneRepository.save(drone);
     }
 
     public Drone getDrone(Integer id) {
         return droneRepository.findById(id)
-                .orElseThrow(() -> new RuntimeException("Drone with id="+id+" not found"));
+                .orElseThrow(() -> new RuntimeException("Drone with id=" + id + " not found"));
     }
 
-    public void loadDrone(DroneLoadingDto droneLoadingDto) {
+    public DroneDto getDroneDto(Integer id) {
+        return droneMapper.mapToDroneDto(getDrone(id));
+    }
 
-        List<Integer> medicationIds = droneLoadingDto.getMedications()
+    public List<DroneDto> getLoadingAvailableDrones() {
+        return droneRepository.getDronesByStateIn(List.of(DroneState.IDLE, DroneState.LOADING))
                 .stream()
-                .map(MedicationQuantityDto::getMedicationId)
+                .map(droneMapper::mapToDroneDto)
+                .collect(Collectors.toList());
+    }
+
+    public Integer getBatteryLevel(Integer droneId) {
+        return getDrone(droneId).getBatteryCapacity().intValue();
+    }
+
+    @Transactional
+    public void loadDrone(DroneLoadingRequestDto droneLoadingRequestDto) {
+
+        List<Integer> medicationIds = droneLoadingRequestDto.getMedications()
+                .stream()
+                .map(MedicationQuantityRequestDto::getMedicationId)
                 .collect(Collectors.toList());
 
-        List<MedicationDto> medications = medicationService.getMedicationsByIsList(medicationIds);
+        List<Medication> medications = medicationService.getMedicationsByIdsList(medicationIds);
 
-        List<MedicationCount> medicationCounts = createMedicationsCount(medications,droneLoadingDto);
+        Drone drone = getDrone(droneLoadingRequestDto.getDroneId());
 
-        Drone drone = getDrone(droneLoadingDto.getDroneId());
-        checkLoadPossibility(drone,medicationCounts);
+        List<Loading> newLoadings = createLoadings(medications, drone, droneLoadingRequestDto);
+        List<Loading> currentDroneLoadings = loadingRepository.getLoadingsByLoadingPK_DroneId(drone.getId());
 
+        checkLoadPossibility(drone, newLoadings, currentDroneLoadings);
 
+        mergeLoadingsQty(newLoadings, currentDroneLoadings);
 
+        drone.setState(DroneState.LOADING);
+        droneRepository.save(drone);
+        medicationService.saveMedications(medications);
 
     }
 
-    private void checkLoadPossibility(Drone drone, List<MedicationCount> medicationCounts ){
+    private void mergeLoadingsQty(List<Loading> newLoadings, List<Loading> currentDroneLoadings) {
+        newLoadings.forEach(newLoading -> {
+            currentDroneLoadings.stream()
+                    .filter(cl -> cl.getLoadingPK().equals(newLoading.getLoadingPK()))
+                    .findFirst().ifPresent(currentLoading -> newLoading.setQty(newLoading.getQty() + currentLoading.getQty()));
+        });
+    }
+
+    public DroneLoadingResponseDto getDroneLoading(Integer droneId) {
+        DroneLoadingResponseDto droneLoadingResponseDto = new DroneLoadingResponseDto();
+        List<Loading> loadings = loadingRepository.getLoadingsByLoadingPK_DroneId(droneId);
+
+        droneLoadingResponseDto.setDrone(getDroneDto(droneId));
+        droneLoadingResponseDto.setMedications(
+                loadings.stream()
+                        .map(loading -> MedicationQuantityResponseDto.builder()
+                                .medication(medicationMapper.toMedicationDto(loading.getLoadingPK().getMedication()))
+                                .quantity(loading.getQty())
+                                .build()
+                        ).collect(Collectors.toList())
+        );
+        droneLoadingResponseDto.setSummaryWeight(calculateMedicationsWeight(loadings));
+
+        return droneLoadingResponseDto;
+    }
+
+    private void checkLoadPossibility(Drone drone, List<Loading> newLoadings, List<Loading> currentDroneLoadings) {
+
+        if (!(DroneState.IDLE.equals(drone.getState())
+                || DroneState.LOADING.equals(drone.getState()))
+        ) {
+            throw new RuntimeException("Can't load. Wrong drone state:" + drone.getState());
+        }
+
         if (drone.getWeightLimit().intValue() <
-                calculateMedicationsWeight(medicationCounts) + calculateDroneCurrentLoadingWeight(drone.getId())){
+                calculateMedicationsWeight(newLoadings) + calculateMedicationsWeight(currentDroneLoadings)) {
             throw new RuntimeException("Can't load drone. Overweight.");
         }
     }
 
-    private Integer calculateDroneCurrentLoadingWeight(Integer droneId) {
-        return loadingRepository.getLoadingsByDrone_Id(droneId)
-                .stream()
-                .map(loading -> loading.getMedication().getWeight().intValue() * loading.getQty())
+
+    private Integer calculateMedicationsWeight(List<Loading> loadings) {
+        return loadings.stream()
+                .map(loading -> loading.getLoadingPK().getMedication().getWeight() * loading.getQty())
                 .reduce(0, Integer::sum);
     }
 
-    private Integer calculateMedicationsWeight(List<MedicationCount> medicationCounts) {
-        return medicationCounts.stream()
-                .map(medicationCount -> medicationCount.medicationDto.getWeight() * medicationCount.count)
-                .reduce(0, Integer::sum);
-    }
-
-    private List<MedicationCount> createMedicationsCount(List<MedicationDto> medications, DroneLoadingDto droneLoadingDto){
-        return droneLoadingDto.getMedications()
-                .stream().map(medicationQuantityDto ->
-                        MedicationCount.builder()
-                                .medicationDto(
-                                        medications.stream()
-                                                .filter(medicationDto ->
-                                                        medicationDto.getId().equals(medicationQuantityDto.getMedicationId())
-                                                )
-                                                .findFirst()
-                                                .orElseThrow(()-> new RuntimeException("Medication with id="
-                                                        +medicationQuantityDto.getMedicationId()+" not found"))
-                                )
-                                .count(medicationQuantityDto.getQuantity())
-                                .build()
-
+    private List<Loading> createLoadings(List<Medication> medications, Drone drone, DroneLoadingRequestDto droneLoadingRequestDto) {
+        return droneLoadingRequestDto.getMedications()
+                .stream().map(medicationQuantityRequestDto -> {
+                            LoadingPK loadingPK = new LoadingPK();
+                            loadingPK.setDrone(drone);
+                            loadingPK.setMedication(medications.stream()
+                                    .filter(medication ->
+                                            medication.getId().equals(medicationQuantityRequestDto.getMedicationId())
+                                    )
+                                    .findFirst()
+                                    .orElseThrow(() -> new RuntimeException("Medication with id="
+                                            + medicationQuantityRequestDto.getMedicationId() + " not found"))
+                            );
+                            return Loading.builder()
+                                    .loadingPK(loadingPK)
+                                    .qty(medicationQuantityRequestDto.getQuantity())
+                                    .build();
+                        }
                 ).collect(Collectors.toList());
     }
 
-
-    private void checkDrone(DroneDto drone) {
+    private void checkDroneDto(DroneDto drone) {
         if (drone.getSerialNumber().length() > 100) {
             throw new IllegalArgumentException("Serial number is too long");
         }
@@ -111,12 +167,4 @@ public class DroneService {
     }
 
 
-    @Data
-    @AllArgsConstructor
-    @NoArgsConstructor
-    @Builder
-    class MedicationCount {
-        private MedicationDto medicationDto;
-        private Integer count;
-    }
 }

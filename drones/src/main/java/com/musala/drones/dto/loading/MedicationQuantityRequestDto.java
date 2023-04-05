@@ -4,15 +4,12 @@ import lombok.AllArgsConstructor;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 
-import java.util.List;
-
+@Data
 @AllArgsConstructor
 @NoArgsConstructor
-@Data
-public class DroneLoadingDto {
+public class MedicationQuantityRequestDto {
 
-    private Integer droneId;
+    private Integer medicationId;
 
-    private List<MedicationQuantityDto> medications;
-
+    private Integer quantity;
 }
