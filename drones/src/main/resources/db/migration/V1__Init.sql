@@ -50,16 +50,29 @@ VALUES
 
 INSERT INTO MEDICATIONS (NAME, WEIGHT, CODE, IMAGE)
 VALUES
-    ('Ibuprofen', 200, 'IBU_123', null),
-    ('Aspirin', 150, 'ASP_456', null),
-    ('Paracetamol', 180, 'PAR_789', null),
-    ('Lisinopril', 220, 'LIS_012', null),
-    ('Amlodipine', 250, 'AML_345', null),
-    ('Metformin', 170, 'MET_678', null),
-    ('Atorvastatin', 210, 'ATO_901', null),
-    ('Omeprazole', 190, 'OME_234', null),
-    ('Amoxicillin', 230, 'AMO_567', null),
-    ('Gabapentin', 260, 'GAB_890', null);
+    ('Ibuprofen', 20, 'IBU_123', null),
+    ('Aspirin', 15, 'ASP_456', null),
+    ('Paracetamol', 18, 'PAR_789', null),
+    ('Lisinopril', 22, 'LIS_012', null),
+    ('Amlodipine', 25, 'AML_345', null),
+    ('Metformin', 17, 'MET_678', null),
+    ('Atorvastatin', 20, 'ATO_901', null),
+    ('Omeprazole', 10, 'OME_234', null),
+    ('Amoxicillin', 30, 'AMO_567', null),
+    ('Gabapentin', 60, 'GAB_890', null);
+
+INSERT INTO LOADINGS (DRONE_ID, MEDICATION_ID, QTY)
+VALUES
+    (1, 1, 1),
+    (2, 2, 2),
+    (3, 3, 3),
+    (4, 4, 1),
+    (5, 5, 2),
+    (6, 6, 3),
+    (7, 7, 2),
+    (8, 8, 1),
+    (9, 9, 1),
+    (10, 10, 1);
 
 
 

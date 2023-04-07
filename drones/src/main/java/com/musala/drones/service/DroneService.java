@@ -118,6 +118,10 @@ public class DroneService {
             throw new RuntimeException("Can't load. Wrong drone state:" + drone.getState());
         }
 
+        if(drone.getBatteryCapacity().intValue() < 25){
+            throw new RuntimeException("Can't load drone. Battery level is below 25%.");
+        }
+
         if (drone.getWeightLimit().intValue() <
                 calculateMedicationsWeight(newLoadings) + calculateMedicationsWeight(currentDroneLoadings)) {
             throw new RuntimeException("Can't load drone. Overweight.");

@@ -1,3 +1,0 @@
-databaseChangeLog:
-  - include:
-      file: db/migrations/V1__Init.sql
