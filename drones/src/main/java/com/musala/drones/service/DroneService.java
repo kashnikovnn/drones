@@ -12,15 +12,19 @@ import com.musala.drones.model.Drone;
 import com.musala.drones.model.Loading;
 import com.musala.drones.model.LoadingPK;
 import com.musala.drones.model.Medication;
+import com.musala.drones.model.BatteryLevelLog;
 import com.musala.drones.model.enums.DroneState;
+import com.musala.drones.repository.BatteryLevelLogRepository;
 import com.musala.drones.repository.DroneRepository;
 import com.musala.drones.repository.LoadingRepository;
 import lombok.RequiredArgsConstructor;
+import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
 import java.util.stream.Collectors;
+import java.util.stream.StreamSupport;
 
 @Service
 @RequiredArgsConstructor
@@ -32,10 +36,15 @@ public class DroneService {
     private final MedicationService medicationService;
     private final MedicationMapper medicationMapper;
 
+    private final BatteryCheckService batteryCheckService;
+
+    private final BatteryLevelLogRepository batteryLevelLogRepository;
+
 
     public void registerDrone(DroneDto droneDto) {
         checkDroneDto(droneDto);
         Drone drone = droneMapper.mapToDrone(droneDto);
+        drone.setState(DroneState.IDLE);
         droneRepository.save(drone);
     }
 
@@ -80,16 +89,14 @@ public class DroneService {
 
         drone.setState(DroneState.LOADING);
         droneRepository.save(drone);
-        medicationService.saveMedications(medications);
+        loadingRepository.saveAll(newLoadings);
 
     }
 
     private void mergeLoadingsQty(List<Loading> newLoadings, List<Loading> currentDroneLoadings) {
-        newLoadings.forEach(newLoading -> {
-            currentDroneLoadings.stream()
-                    .filter(cl -> cl.getLoadingPK().equals(newLoading.getLoadingPK()))
-                    .findFirst().ifPresent(currentLoading -> newLoading.setQty(newLoading.getQty() + currentLoading.getQty()));
-        });
+        newLoadings.forEach(newLoading -> currentDroneLoadings.stream()
+                .filter(cl -> cl.getLoadingPK().equals(newLoading.getLoadingPK()))
+                .findFirst().ifPresent(currentLoading -> newLoading.setQty(newLoading.getQty() + currentLoading.getQty())));
     }
 
     public DroneLoadingResponseDto getDroneLoading(Integer droneId) {
@@ -118,7 +125,7 @@ public class DroneService {
             throw new RuntimeException("Can't load. Wrong drone state:" + drone.getState());
         }
 
-        if(drone.getBatteryCapacity().intValue() < 25){
+        if (drone.getBatteryCapacity().intValue() < 25) {
             throw new RuntimeException("Can't load drone. Battery level is below 25%.");
         }
 
@@ -168,6 +175,19 @@ public class DroneService {
         if (drone.getBatteryCapacity() < 0 || drone.getBatteryCapacity() > 100) {
             throw new IllegalArgumentException("Battery capacity must be between 0 and 100");
         }
+    }
+
+    @Scheduled(fixedRate = 60000)
+    public void checkBatteryLevels() {
+        List<Drone> allDrones = StreamSupport.stream(droneRepository.findAll().spliterator(), false)
+                .collect(Collectors.toList());
+        List<BatteryLevelLog> batteryLevelLogs = batteryCheckService.checkBatteryLevels(allDrones);
+        batteryLevelLogRepository.saveAll(batteryLevelLogs);
+        allDrones.forEach(drone -> batteryLevelLogs.stream()
+                .filter(batteryLevelLog -> batteryLevelLog.getDroneId().equals(drone.getId()))
+                .findFirst().ifPresent(bll -> drone.setBatteryCapacity(bll.getBatteryLevel())));
+        droneRepository.saveAll(allDrones);
+
     }
 
 

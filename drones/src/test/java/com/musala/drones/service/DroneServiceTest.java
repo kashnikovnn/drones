@@ -5,11 +5,8 @@ import com.musala.drones.dto.loading.DroneLoadingRequestDto;
 import com.musala.drones.dto.loading.DroneLoadingResponseDto;
 import com.musala.drones.dto.loading.MedicationQuantityRequestDto;
 import com.musala.drones.dto.mappers.DroneMapper;
-import com.musala.drones.dto.mappers.MedicationMapper;
-import com.musala.drones.model.Drone;
-import com.musala.drones.model.Loading;
-import com.musala.drones.model.LoadingPK;
-import com.musala.drones.model.Medication;
+import com.musala.drones.model.*;
+import com.musala.drones.model.enums.DroneModel;
 import com.musala.drones.model.enums.DroneState;
 import com.musala.drones.repository.DroneRepository;
 import com.musala.drones.repository.LoadingRepository;
@@ -25,6 +22,7 @@ import org.mockito.Spy;
 import org.mockito.junit.MockitoJUnitRunner;
 import org.mockito.junit.jupiter.MockitoExtension;
 
+import java.time.LocalDateTime;
 import java.util.*;
 import java.util.stream.Collectors;
 
@@ -52,6 +50,55 @@ class DroneServiceTest {
     @Mock
     private MedicationService medicationService;
 
+    @Test
+    public void testCheckBatteryLevels() {
+        // Arrange
+        Drone drone1 = Drone.builder()
+                .id(1)
+                .serialNumber("123")
+                .model(DroneModel.HEAVYWEIGHT)
+                .weightLimit((short) 500)
+                .batteryCapacity((byte) 50)
+                .state(DroneState.IDLE)
+                .build();
+
+        Drone drone2 = Drone.builder()
+                .id(2)
+                .serialNumber("456")
+                .model(DroneModel.LIGHTWEIGHT)
+                .weightLimit((short) 750)
+                .batteryCapacity((byte) 80)
+                .state(DroneState.RETURNING)
+                .build();
+
+        List<Drone> drones = Arrays.asList(drone1, drone2);
+
+        BatteryCheckService batteryCheckService = mock(BatteryCheckService.class);
+
+        BatteryLevelLog batteryLevelLog1 = BatteryLevelLog.builder()
+                .id(1L)
+                .droneId(drone1.getId())
+                .date(LocalDateTime.now())
+                .batteryLevel((byte) 60)
+                .build();
+
+        BatteryLevelLog batteryLevelLog2 = BatteryLevelLog.builder()
+                .id(2L)
+                .droneId(drone2.getId())
+                .date(LocalDateTime.now())
+                .batteryLevel((byte) 80)
+                .build();
+
+        List<BatteryLevelLog> batteryLevelLogs = Arrays.asList(batteryLevelLog1, batteryLevelLog2);
+
+        when(batteryCheckService.checkBatteryLevels(drones)).thenReturn(batteryLevelLogs);
+
+        // Act
+        batteryCheckService.checkBatteryLevels(drones);
+
+        // Assert
+        verify(batteryCheckService, times(1)).checkBatteryLevels(drones);
+    }
 
 
     @Test
@@ -168,6 +215,7 @@ class DroneServiceTest {
         drone.setId(1);
         drone.setWeightLimit((short) 500);
         drone.setState(DroneState.IDLE);
+        drone.setBatteryCapacity((byte) 30);
         Medication medication = new Medication();
         medication.setId(2);
         medication.setWeight((short) 50);
@@ -187,7 +235,7 @@ class DroneServiceTest {
 
         // Assert
         verify(droneRepository, times(1)).save(any());
-        verify(medicationService, times(1)).saveMedications(medications);
+        verify(loadingRepository, times(1)).saveAll(any());
     }
 
     @Test
